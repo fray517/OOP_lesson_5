@@ -41,6 +41,16 @@ class Bullet(pygame.sprite.Sprite):
             config.BULLET_HEIGHT
         )
         self.bullet_type = "normal"
+        # Создание изображения для совместимости со sprite groups
+        self.image = pygame.Surface(
+            (config.BULLET_WIDTH, config.BULLET_HEIGHT),
+            pygame.SRCALPHA
+        )
+        pygame.draw.rect(
+            self.image,
+            config.BULLET_COLOR,
+            (0, 0, config.BULLET_WIDTH, config.BULLET_HEIGHT)
+        )
 
     def update(self) -> None:
         """
@@ -61,8 +71,18 @@ class Bullet(pygame.sprite.Sprite):
         Args:
             surface: Поверхность для отрисовки.
         """
+        # Отрисовка основного тела пули
         pygame.draw.rect(
             surface,
             config.BULLET_COLOR,
             self.rect
+        )
+        # Добавляем яркую точку в центре для эффекта свечения
+        center_x = self.rect.centerx
+        center_y = self.rect.centery
+        pygame.draw.circle(
+            surface,
+            config.COLOR_WHITE,
+            (center_x, center_y),
+            2
         )
