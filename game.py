@@ -215,6 +215,8 @@ class Game:
 
     def draw_game(self) -> None:
         """Отрисовка игрового процесса."""
+        current_time = pygame.time.get_ticks()
+        
         # Отрисовка пуль
         for bullet in self.bullets:
             bullet.draw(self.screen)
@@ -225,7 +227,7 @@ class Game:
         
         # Отрисовка игрока (для мигания при неуязвимости)
         if self.player:
-            self.player.draw(self.screen)
+            self.player.draw(self.screen, current_time)
         
         # Отрисовка HUD
         self.draw_hud()

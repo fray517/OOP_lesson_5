@@ -3,6 +3,7 @@
 """
 
 import pygame
+import os
 from typing import Optional
 import config
 
@@ -13,6 +14,43 @@ class Player(pygame.sprite.Sprite):
     
     Отвечает за движение, стрельбу, получение урона и отображение.
     """
+    
+    # Загрузка изображения как атрибут класса (один раз для всех экземпляров)
+    _image = None
+    
+    @classmethod
+    def _load_image(cls) -> pygame.Surface:
+        """
+        Загрузка изображения корабля игрока.
+        
+        Returns:
+            Поверхность с изображением корабля.
+        """
+        if cls._image is None:
+            image_path = os.path.join(
+                os.path.dirname(__file__),
+                'assets',
+                'player_ship.png'
+            )
+            try:
+                cls._image = pygame.image.load(image_path).convert_alpha()
+                # Масштабирование до нужного размера
+                cls._image = pygame.transform.scale(
+                    cls._image,
+                    (config.PLAYER_WIDTH, config.PLAYER_HEIGHT)
+                )
+            except (pygame.error, FileNotFoundError):
+                # Если изображение не загружено, создаём простой спрайт
+                cls._image = pygame.Surface(
+                    (config.PLAYER_WIDTH, config.PLAYER_HEIGHT),
+                    pygame.SRCALPHA
+                )
+                pygame.draw.rect(
+                    cls._image,
+                    config.PLAYER_COLOR,
+                    (0, 0, config.PLAYER_WIDTH, config.PLAYER_HEIGHT)
+                )
+        return cls._image
 
     def __init__(self, x: int, y: int) -> None:
         """
@@ -26,12 +64,14 @@ class Player(pygame.sprite.Sprite):
         self.x = float(x)
         self.y = float(y)
         self.speed = config.PLAYER_SPEED
-        self.rect = pygame.Rect(
-            int(self.x),
-            int(self.y),
-            config.PLAYER_WIDTH,
-            config.PLAYER_HEIGHT
-        )
+        
+        # Загрузка изображения
+        self.image = self._load_image()
+        
+        self.rect = self.image.get_rect()
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+        
         self.max_hp = config.PLAYER_MAX_HP
         self.hp = self.max_hp
         self.lives = config.PLAYER_START_LIVES
@@ -62,11 +102,11 @@ class Player(pygame.sprite.Sprite):
         
         # Ограничение по границам окна
         self.x = max(0, min(
-            config.SCREEN_WIDTH - config.PLAYER_WIDTH,
+            config.SCREEN_WIDTH - self.rect.width,
             self.x + dx
         ))
         self.y = max(0, min(
-            config.SCREEN_HEIGHT - config.PLAYER_HEIGHT,
+            config.SCREEN_HEIGHT - self.rect.height,
             self.y + dy
         ))
         
@@ -109,20 +149,25 @@ class Player(pygame.sprite.Sprite):
                 self.is_invincible = False
                 self.invincibility_timer = 0
 
-    def draw(self, surface: pygame.Surface) -> None:
+    def draw(self, surface: pygame.Surface, current_time: int = None) -> None:
         """
         Отрисовка игрока с учётом мигания при неуязвимости.
         
         Args:
             surface: Поверхность для отрисовки.
+            current_time: Текущее время в миллисекундах для мигания.
         """
-        if not self.is_invincible or \
-                (pygame.time.get_ticks() // 100) % 2 == 0:
-            pygame.draw.rect(
-                surface,
-                config.PLAYER_COLOR,
-                self.rect
-            )
+        if current_time is None:
+            current_time = pygame.time.get_ticks()
+        
+        # Мигание при неуязвимости (каждые 100 мс)
+        should_draw = True
+        if self.is_invincible:
+            should_draw = (current_time // 100) % 2 == 0
+        
+        if should_draw:
+            # Отрисовка изображения корабля
+            surface.blit(self.image, self.rect)
 
     def take_damage(self, damage: int, current_time: int) -> None:
         """
