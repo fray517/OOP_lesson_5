@@ -17,6 +17,7 @@ class GameState(Enum):
     PLAYING = 2
     PAUSED = 3
     GAME_OVER = 4
+    SETTINGS = 5
 
 
 class Game:
@@ -51,7 +52,8 @@ class Game:
         # Игровые параметры
         self.score = 0
         self.wave = 1
-        self.difficulty_level = 1
+        self.base_difficulty = 1  # Стартовая сложность (можно менять в Settings)
+        self.difficulty_level = self.base_difficulty
         
         # Система волн
         self.enemies_in_wave = 5  # Количество врагов в первой волне
@@ -63,6 +65,12 @@ class Game:
         # Таймеры
         self.last_enemy_spawn = 0
         self.start_time = 0  # Время начала текущей игры
+        
+        # Главное меню
+        self.menu_options = ["Play", "Settings", "Quit"]
+        self.menu_selected = 0
+        self.menu_message: Optional[str] = None
+        self.menu_message_time = 0
         
         # Шрифт для HUD
         try:
@@ -109,7 +117,7 @@ class Game:
         # Сброс параметров
         self.score = 0
         self.wave = 1
-        self.difficulty_level = 1
+        self.difficulty_level = self.base_difficulty
         self.enemies_in_wave = 5
         self.enemies_spawned = 0
         self.wave_complete = False
@@ -118,6 +126,65 @@ class Game:
         self.last_enemy_spawn = pygame.time.get_ticks()
         
         self.state = GameState.PLAYING
+    
+    def handle_menu_input(self, event: pygame.event.Event) -> None:
+        """
+        Обработка ввода в главном меню.
+        """
+        if event.type != pygame.KEYDOWN:
+            return
+        
+        if event.key in (pygame.K_UP, pygame.K_w):
+            self.menu_selected = (self.menu_selected - 1) % len(
+                self.menu_options
+            )
+        elif event.key in (pygame.K_DOWN, pygame.K_s):
+            self.menu_selected = (self.menu_selected + 1) % len(
+                self.menu_options
+            )
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+            self._execute_menu_option()
+        elif event.key == pygame.K_ESCAPE:
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+    
+    def _execute_menu_option(self) -> None:
+        """
+        Выполнение выбранного пункта меню.
+        """
+        option = self.menu_options[self.menu_selected]
+        if option == "Play":
+            self.start_game()
+        elif option == "Settings":
+            self.state = GameState.SETTINGS
+        elif option == "Quit":
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+    
+    def handle_pause_input(self, event: pygame.event.Event) -> None:
+        """
+        Обработка ввода на экране паузы.
+        """
+        if event.type != pygame.KEYDOWN:
+            return
+        
+        if event.key == pygame.K_p:
+            self.state = GameState.PLAYING
+        elif event.key == pygame.K_ESCAPE:
+            self.state = GameState.MENU
+
+    def handle_settings_input(self, event: pygame.event.Event) -> None:
+        """
+        Обработка ввода на экране настроек.
+        """
+        if event.type != pygame.KEYDOWN:
+            return
+        
+        if event.key in (pygame.K_LEFT, pygame.K_a):
+            self.base_difficulty = max(1, self.base_difficulty - 1)
+        elif event.key in (pygame.K_RIGHT, pygame.K_d):
+            self.base_difficulty = min(10, self.base_difficulty + 1)
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE):
+            # Возврат в меню
+            self.state = GameState.MENU
 
     def handle_events(self, event: pygame.event.Event) -> None:
         """
@@ -130,11 +197,9 @@ class Game:
             return
         
         if self.state == GameState.MENU:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                    self.start_game()
-                elif event.key == pygame.K_ESCAPE:
-                    return
+            self.handle_menu_input(event)
+        elif self.state == GameState.SETTINGS:
+            self.handle_settings_input(event)
         
         elif self.state == GameState.PLAYING:
             if event.type == pygame.KEYDOWN:
@@ -149,9 +214,7 @@ class Game:
                     self.state = GameState.PAUSED
         
         elif self.state == GameState.PAUSED:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
-                    self.state = GameState.PLAYING
+            self.handle_pause_input(event)
         
         elif self.state == GameState.GAME_OVER:
             if event.type == pygame.KEYDOWN:
@@ -199,8 +262,8 @@ class Game:
                 self.enemies_spawned = 0
                 self.wave_complete = False
                 self.difficulty_level = min(
-                    self.wave // 3 + 1, 10
-                )  # Увеличение сложности
+                    self.base_difficulty + self.wave // 3, 10
+                )  # Увеличение сложности с учётом базовой
                 self.last_enemy_spawn = current_time
         
         # Спавн врагов (только если волна не завершена)
@@ -255,6 +318,8 @@ class Game:
         
         if self.state == GameState.MENU:
             self.draw_menu()
+        elif self.state == GameState.SETTINGS:
+            self.draw_settings()
         elif self.state == GameState.PLAYING:
             self.draw_game()
         elif self.state == GameState.PAUSED:
@@ -277,15 +342,58 @@ class Game:
         )
         self.screen.blit(title, title_rect)
         
-        instruction = self.font.render(
-            "Нажмите ENTER или SPACE для начала",
+        # Пункты меню
+        start_y = 260
+        spacing = 50
+        for idx, option in enumerate(self.menu_options):
+            color = config.COLOR_WHITE
+            if idx == self.menu_selected:
+                color = config.COLOR_YELLOW
+            text = self.font.render(option, True, color)
+            text_rect = text.get_rect(
+                center=(config.SCREEN_WIDTH // 2, start_y + idx * spacing)
+            )
+            # Подсветка выбранного пункта
+            if idx == self.menu_selected:
+                highlight_rect = pygame.Rect(
+                    text_rect.x - 20,
+                    text_rect.y - 5,
+                    text_rect.width + 40,
+                    text_rect.height + 10
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    config.COLOR_CYAN,
+                    highlight_rect,
+                    border_radius=6
+                )
+            self.screen.blit(text, text_rect)
+        
+        # Подсказки
+        hint = self.font.render(
+            "↑/↓ или W/S — выбор, ENTER/SPACE — подтвердить, ESC — выход",
             True,
             config.COLOR_WHITE
         )
-        inst_rect = instruction.get_rect(
-            center=(config.SCREEN_WIDTH // 2, 300)
+        hint_rect = hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - 80)
         )
-        self.screen.blit(instruction, inst_rect)
+        self.screen.blit(hint, hint_rect)
+        
+        # Сообщение (например, для Settings)
+        if self.menu_message:
+            if pygame.time.get_ticks() - self.menu_message_time < 2000:
+                message = self.font.render(
+                    self.menu_message,
+                    True,
+                    config.COLOR_YELLOW
+                )
+                msg_rect = message.get_rect(
+                    center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - 130)
+                )
+                self.screen.blit(message, msg_rect)
+            else:
+                self.menu_message = None
 
     def draw_game(self) -> None:
         """
@@ -485,6 +593,66 @@ class Game:
             center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 50)
         )
         self.screen.blit(instruction, inst_rect)
+        
+        to_menu = self.font.render(
+            "ESC — выход в меню",
+            True,
+            config.COLOR_WHITE
+        )
+        menu_rect = to_menu.get_rect(
+            center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 90)
+        )
+        self.screen.blit(to_menu, menu_rect)
+    
+    def draw_settings(self) -> None:
+        """Отрисовка экрана настроек."""
+        overlay = pygame.Surface(
+            (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+        )
+        overlay.fill(config.COLOR_BLACK)
+        overlay.set_alpha(220)
+        self.screen.blit(overlay, (0, 0))
+        
+        title = self.font.render(
+            "Settings",
+            True,
+            config.COLOR_WHITE
+        )
+        title_rect = title.get_rect(
+            center=(config.SCREEN_WIDTH // 2, 120)
+        )
+        self.screen.blit(title, title_rect)
+        
+        # Настройка стартовой сложности
+        diff_text = self.font.render(
+            "Стартовая сложность:",
+            True,
+            config.COLOR_WHITE
+        )
+        diff_rect = diff_text.get_rect(
+            center=(config.SCREEN_WIDTH // 2, 200)
+        )
+        self.screen.blit(diff_text, diff_rect)
+        
+        value_text = self.font.render(
+            f"{self.base_difficulty}",
+            True,
+            config.COLOR_YELLOW
+        )
+        value_rect = value_text.get_rect(
+            center=(config.SCREEN_WIDTH // 2, 250)
+        )
+        self.screen.blit(value_text, value_rect)
+        
+        hint = self.font.render(
+            "←/→ или A/D — изменить, ENTER/SPACE/ESC — назад",
+            True,
+            config.COLOR_WHITE
+        )
+        hint_rect = hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - 100)
+        )
+        self.screen.blit(hint, hint_rect)
 
     def draw_game_over(self) -> None:
         """Отрисовка экрана окончания игры."""
