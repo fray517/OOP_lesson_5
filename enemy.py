@@ -31,7 +31,12 @@ class Enemy(pygame.sprite.Sprite):
             Поверхность с изображением врага.
         """
         if enemy_type not in cls._images:
+            width = config.ENEMY_WIDTH
+            height = config.ENEMY_HEIGHT
+            surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            
             if enemy_type == "basic":
+                # UFO‑спрайт из файла
                 image_path = os.path.join(
                     os.path.dirname(__file__),
                     'assets',
@@ -39,33 +44,63 @@ class Enemy(pygame.sprite.Sprite):
                 )
                 try:
                     image = pygame.image.load(image_path).convert_alpha()
-                    # Масштабирование до нужного размера
-                    cls._images[enemy_type] = pygame.transform.scale(
+                    surface = pygame.transform.scale(
                         image,
-                        (config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                        (width, height)
                     )
                 except (pygame.error, FileNotFoundError):
-                    # Если изображение не загружено, создаём простой спрайт
-                    cls._images[enemy_type] = pygame.Surface(
-                        (config.ENEMY_WIDTH, config.ENEMY_HEIGHT),
-                        pygame.SRCALPHA
-                    )
-                    pygame.draw.rect(
-                        cls._images[enemy_type],
+                    pygame.draw.ellipse(
+                        surface,
                         config.ENEMY_COLOR,
-                        (0, 0, config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                        (0, height // 4, width, height // 2)
                     )
-            else:
-                # Для других типов врагов создаём простой спрайт
-                cls._images[enemy_type] = pygame.Surface(
-                    (config.ENEMY_WIDTH, config.ENEMY_HEIGHT),
-                    pygame.SRCALPHA
+            elif enemy_type == "fast":
+                # Быстрый — маленький треугольник яркого цвета
+                points = [
+                    (width // 2, 0),
+                    (0, height),
+                    (width, height),
+                ]
+                pygame.draw.polygon(surface, config.COLOR_YELLOW, points)
+            elif enemy_type == "heavy":
+                # Тяжёлый — большой прямоугольник с рамкой
+                pygame.draw.rect(
+                    surface,
+                    config.COLOR_RED,
+                    (0, 0, width, height)
                 )
                 pygame.draw.rect(
-                    cls._images[enemy_type],
-                    config.ENEMY_COLOR,
-                    (0, 0, config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                    surface,
+                    config.COLOR_WHITE,
+                    (3, 3, width - 6, height - 6),
+                    2
                 )
+            elif enemy_type == "tank":
+                # Танк — круг с толстой окантовкой
+                radius = min(width, height) // 2 - 2
+                center = (width // 2, height // 2)
+                pygame.draw.circle(
+                    surface,
+                    config.COLOR_GREEN,
+                    center,
+                    radius
+                )
+                pygame.draw.circle(
+                    surface,
+                    config.COLOR_BLACK,
+                    center,
+                    radius,
+                    3
+                )
+            else:
+                # Неизвестный тип — базовый прямоугольник
+                pygame.draw.rect(
+                    surface,
+                    config.ENEMY_COLOR,
+                    (0, 0, width, height)
+                )
+            
+            cls._images[enemy_type] = surface
         return cls._images[enemy_type]
 
     def __init__(
@@ -100,7 +135,16 @@ class Enemy(pygame.sprite.Sprite):
             config.ENEMY_HEIGHT
         )
         # Очки за уничтожение зависят от типа
-        self.points = 10 if enemy_type == "basic" else 20
+        if enemy_type == "basic":
+            self.points = 10
+        elif enemy_type == "fast":
+            self.points = 15
+        elif enemy_type == "heavy":
+            self.points = 25
+        elif enemy_type == "tank":
+            self.points = 50
+        else:
+            self.points = 10
         
         # Загрузка изображения для данного типа врага
         self.image = self._load_image(enemy_type)

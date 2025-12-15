@@ -3,6 +3,7 @@
 """
 
 import pygame
+import random
 from enum import Enum
 from typing import Optional
 import config
@@ -294,12 +295,27 @@ class Game:
             self.base_spawn_interval - (self.difficulty_level - 1) * 150,
             self.min_spawn_interval,
         )
-        enemy_speed = min(
+        # Выбор типа врага в зависимости от сложности и волны
+        enemy_type = self._choose_enemy_type()
+        
+        # Базовые параметры с учётом сложности
+        base_speed = min(
             self.base_enemy_speed + (self.difficulty_level - 1),
             self.max_enemy_speed,
         )
-        enemy_hp = min(
+        base_hp = min(
             self.base_enemy_hp + (self.difficulty_level - 1) * 5,
+            self.max_enemy_hp,
+        )
+        
+        # Множители для разных типов врагов
+        speed_mult, hp_mult = self._get_enemy_multipliers(enemy_type)
+        enemy_speed = min(
+            int(base_speed * speed_mult),
+            self.max_enemy_speed,
+        )
+        enemy_hp = min(
+            int(base_hp * hp_mult),
             self.max_enemy_hp,
         )
         
@@ -308,7 +324,7 @@ class Game:
                 self.enemies_spawned < self.enemies_in_wave and
                 current_time - self.last_enemy_spawn >= spawn_interval):
             enemy = spawn_enemy(
-                "basic",
+                enemy_type,
                 config.SCREEN_WIDTH,
                 speed=enemy_speed,
                 hp=enemy_hp,
@@ -318,40 +334,79 @@ class Game:
             self.enemies_spawned += 1
             self.last_enemy_spawn = current_time
         
-        # Проверка столкновений пуль и врагов (оптимизированная)
-        # Используем spritecollide для каждой пули
-        # Создаём копию списка пуль, чтобы избежать проблем при удалении
-        bullets_to_check = list(self.bullets)
-        for bullet in bullets_to_check:
-            # Проверяем столкновение пули с группой врагов
-            hit_enemies = pygame.sprite.spritecollide(
-                bullet,
-                self.enemies,
-                False
-            )
-            if hit_enemies:
-                # Обрабатываем первое столкновение
-                enemy = hit_enemies[0]
+        # Проверка столкновений пуль и врагов (через groupcollide)
+        bullet_hits = pygame.sprite.groupcollide(
+            self.bullets,
+            self.enemies,
+            False,  # пули удаляем вручную после обработки
+            False,  # врагов удаляем только если hp <= 0
+        )
+        for bullet, hit_enemies in bullet_hits.items():
+            for enemy in hit_enemies:
                 if enemy.take_damage(bullet.damage):
-                    # Враг уничтожен — увеличиваем счёт
                     self.score += enemy.points
-                    # Здесь можно добавить эффект взрыва (опционально)
-                # Пулю удаляем после попадания
                 bullet.kill()
+                break  # одна пуля — одно попадание
         
-        # Проверка столкновений игрока и врагов (оптимизированная)
+        # Проверка столкновений игрока и врагов
         if self.player and not self.player.is_invincible:
-            # Проверяем столкновение игрока с группой врагов
-            # True означает автоматическое удаление врагов из группы
             hit_enemies = pygame.sprite.spritecollide(
                 self.player,
                 self.enemies,
-                True
+                True,
             )
             if hit_enemies:
-                # При столкновении игрок получает урон
-                # Обрабатываем только первое столкновение за кадр
                 self.player.take_damage(10, current_time)
+
+    def _choose_enemy_type(self) -> str:
+        """
+        Выбор типа врага в зависимости от сложности и волны.
+        
+        Возвращает одно из значений: "basic", "fast", "heavy", "tank".
+        """
+        level = self.difficulty_level
+        wave = self.wave
+        
+        # На низких уровнях сложности — в основном базовые враги
+        if level <= 2 and wave < 3:
+            return "basic"
+        
+        # Список доступных типов по мере роста сложности
+        enemy_types = ["basic"]
+        if level >= 2 or wave >= 2:
+            enemy_types.append("fast")
+        if level >= 3 or wave >= 4:
+            enemy_types.append("heavy")
+        if level >= 5 or wave >= 6:
+            enemy_types.append("tank")
+        
+        weights = []
+        for etype in enemy_types:
+            if etype == "basic":
+                weights.append(4)
+            elif etype == "fast":
+                weights.append(3)
+            elif etype == "heavy":
+                weights.append(2)
+            elif etype == "tank":
+                weights.append(1)
+        return random.choices(enemy_types, weights=weights, k=1)[0]
+
+    def _get_enemy_multipliers(self, enemy_type: str) -> tuple[float, float]:
+        """
+        Множители скорости и здоровья для разных типов врагов.
+        
+        Returns:
+            (speed_mult, hp_mult)
+        """
+        if enemy_type == "fast":
+            return (1.8, 0.6)  # очень быстрый, мало HP
+        if enemy_type == "heavy":
+            return (0.7, 2.0)  # медленный, много HP
+        if enemy_type == "tank":
+            return (0.5, 3.0)  # очень медленный, огромный запас HP
+        # basic и все остальные
+        return (1.0, 1.0)
 
     def draw(self) -> None:
         """Отрисовка игры."""
