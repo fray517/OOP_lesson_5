@@ -18,6 +18,7 @@ from explosion import Explosion, HitEffect, PickupEffect
 from player import Player
 from powerup import PowerUp
 from sound_manager import SoundManager
+from save_manager import load_high_score, save_high_score
 
 
 class GameState(Enum):
@@ -54,7 +55,8 @@ class Game:
 
         # Игровые параметры
         self.score = 0
-        self.best_score = 0
+        # Загружаем лучший результат из файла
+        self.best_score = load_high_score()
         self.wave = 1
         self.base_difficulty = 1
         self.difficulty_level = self.base_difficulty
@@ -234,6 +236,7 @@ class Game:
         if not self.player or not self.player.is_alive():
             if self.score > self.best_score:
                 self.best_score = self.score
+                save_high_score(self.best_score)
             self.state = GameState.GAME_OVER
             return
 
