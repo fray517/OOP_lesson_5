@@ -1,10 +1,13 @@
-"""Основной класс игры с логикой состояний."""
+"""Основной класс игры с логикой состояний.
+
+Включает волны врагов, бонусы, эффекты и HUD.
+"""
 
 from __future__ import annotations
 
-import random
 from enum import Enum
 from typing import Optional
+import random
 
 import pygame
 
@@ -13,6 +16,7 @@ from bullet import Bullet
 from enemy import Enemy, spawn_enemy
 from player import Player
 from powerup import PowerUp
+from explosion import Explosion, HitEffect, PickupEffect
 
 
 class GameState(Enum):
@@ -34,11 +38,12 @@ class Game:
         self.state = GameState.MENU
         self.clock = pygame.time.Clock()
 
-        # Sprite groups
+        # Группы спрайтов
         self.all_sprites = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.powerups = pygame.sprite.Group()
+        self.effects = pygame.sprite.Group()  # взрывы и вспышки
 
         # Игрок
         self.player: Optional[Player] = None
@@ -50,14 +55,14 @@ class Game:
         self.base_difficulty = 1
         self.difficulty_level = self.base_difficulty
 
-        # Система волн
+        # Волны
         self.enemies_in_wave = 5
         self.enemies_spawned = 0
         self.wave_complete = False
         self.wave_pause_timer = 0
         self.wave_pause_duration = 3000
 
-        # Параметры усложнения
+        # Усложнение
         self.base_spawn_interval = config.ENEMY_SPAWN_INTERVAL
         self.min_spawn_interval = 500
         self.base_enemy_speed = config.ENEMY_SPEED
@@ -75,14 +80,14 @@ class Game:
         self.menu_message: Optional[str] = None
         self.menu_message_time = 0
 
-        # Шрифт для HUD
+        # Шрифт
         try:
             self.font = pygame.font.Font(None, 36)
         except Exception:
             self.font = pygame.font.SysFont("arial", 36)
 
     # ------------------------------------------------------------------
-    # Инициализация и рестарт
+    # Запуск / рестарт
     # ------------------------------------------------------------------
     def start_game(self) -> None:
         """Начало новой игры."""
@@ -90,15 +95,14 @@ class Game:
         self.bullets.empty()
         self.enemies.empty()
         self.powerups.empty()
+        self.effects.empty()
 
-        # Игрок
         self.player = Player(
             config.SCREEN_WIDTH // 2 - config.PLAYER_WIDTH // 2,
             config.SCREEN_HEIGHT - config.PLAYER_HEIGHT - 20,
         )
         self.all_sprites.add(self.player)
 
-        # Параметры
         self.score = 0
         self.wave = 1
         self.difficulty_level = self.base_difficulty
@@ -106,8 +110,10 @@ class Game:
         self.enemies_spawned = 0
         self.wave_complete = False
         self.wave_pause_timer = 0
-        self.last_enemy_spawn = pygame.time.get_ticks()
-        self.start_time = self.last_enemy_spawn
+
+        now = pygame.time.get_ticks()
+        self.last_enemy_spawn = now
+        self.start_time = now
 
         self.state = GameState.PLAYING
 
@@ -173,7 +179,7 @@ class Game:
             self.state = GameState.MENU
 
     def handle_events(self, event: pygame.event.Event) -> None:
-        """Глобальная обработка событий Pygame."""
+        """Глобальная обработка событий."""
         if event.type == pygame.QUIT:
             return
 
@@ -213,7 +219,7 @@ class Game:
     # Логика обновления
     # ------------------------------------------------------------------
     def update(self) -> None:
-        """Обновление состояния игры (логика одного кадра)."""
+        """Обновление состояния игры (один кадр)."""
         if self.state != GameState.PLAYING:
             return
 
@@ -225,18 +231,19 @@ class Game:
 
         current_time = pygame.time.get_ticks()
 
-        # Ввод и обновление игрока
+        # Игрок
         keys = pygame.key.get_pressed()
         if self.player:
             self.player.handle_input(keys)
             self.player.update(current_time)
 
-        # Обновление остальных спрайтов
+        # Остальные спрайты
         self.bullets.update()
         self.enemies.update()
         self.powerups.update()
+        self.effects.update()
 
-        # Логика волн и усложнения
+        # Волны и сложность
         self._update_waves_and_difficulty(current_time)
 
         # Столкновения
@@ -244,14 +251,12 @@ class Game:
 
     def _update_waves_and_difficulty(self, current_time: int) -> None:
         """Обновление системы волн и параметров сложности."""
-        # Завершение волны
         if (not self.wave_complete
                 and self.enemies_spawned >= self.enemies_in_wave
                 and len(self.enemies) == 0):
             self.wave_complete = True
             self.wave_pause_timer = current_time
 
-        # Пауза между волнами
         if self.wave_complete:
             if current_time - self.wave_pause_timer >= \
                     self.wave_pause_duration:
@@ -285,7 +290,6 @@ class Game:
         enemy_speed = min(int(base_speed * speed_mult), self.max_enemy_speed)
         enemy_hp = min(int(base_hp * hp_mult), self.max_enemy_hp)
 
-        # Спавн врагов
         if (not self.wave_complete
                 and self.enemies_spawned < self.enemies_in_wave
                 and current_time - self.last_enemy_spawn >= spawn_interval):
@@ -314,6 +318,20 @@ class Game:
                 if enemy.take_damage(bullet.damage):
                     self.score += enemy.points
                     self._maybe_spawn_powerup(enemy)
+                    # Взрыв на месте врага
+                    explosion = Explosion(
+                        enemy.rect.centerx,
+                        enemy.rect.centery,
+                    )
+                    self.effects.add(explosion)
+                    self.all_sprites.add(explosion)
+                # Вспышка попадания
+                hit_effect = HitEffect(
+                    bullet.rect.centerx,
+                    bullet.rect.centery,
+                )
+                self.effects.add(hit_effect)
+                self.all_sprites.add(hit_effect)
                 bullet.kill()
                 break
 
@@ -336,6 +354,12 @@ class Game:
             )
             for powerup in powerup_hits:
                 powerup.apply_effect(self.player, current_time)
+                pickup_effect = PickupEffect(
+                    powerup.rect.centerx,
+                    powerup.rect.centery,
+                )
+                self.effects.add(pickup_effect)
+                self.all_sprites.add(pickup_effect)
 
     def _maybe_spawn_powerup(self, enemy: Enemy) -> None:
         """С шансом создать бонус на месте уничтоженного врага."""
@@ -470,11 +494,14 @@ class Game:
         for powerup in self.powerups:
             self.screen.blit(powerup.image, powerup.rect)
 
+        # Эффекты
+        self.effects.draw(self.screen)
+
         # Игрок
         if self.player:
             self.player.draw(self.screen, current_time)
 
-        # HUD и всплывающие сообщения
+        # HUD и оверлеи
         self._draw_wave_overlay()
         self.draw_hud()
 
@@ -511,8 +538,7 @@ class Game:
         self.screen.blit(preparing_text, preparing_rect)
 
     def draw_hud(self) -> None:
-        """Отрисовка интерфейса (HUD)."""
-        # Счёт
+        """Отрисовка HUD."""
         score_text = self.font.render(
             f"Score: {self.score}",
             True,
@@ -520,7 +546,6 @@ class Game:
         )
         self.screen.blit(score_text, (10, 10))
 
-        # Жизни и HP
         if self.player:
             lives_text = self.font.render(
                 f"Lives: {self.player.lives}",
@@ -555,7 +580,6 @@ class Game:
                     (bar_x, bar_y, hp_width, bar_height),
                 )
 
-        # Волна и сложность
         wave_text = self.font.render(
             f"Wave: {self.wave}",
             True,
@@ -578,7 +602,6 @@ class Game:
         )
         self.screen.blit(difficulty_text, (10, 250))
 
-        # Таймер
         elapsed_ms = pygame.time.get_ticks() - self.start_time
         elapsed_seconds = elapsed_ms // 1000
         minutes = elapsed_seconds // 60
@@ -590,7 +613,6 @@ class Game:
         )
         self.screen.blit(timer_text, (10, 290))
 
-        # Активные эффекты
         if self.player and self.player.active_effects:
             effects_str = ", ".join(sorted(self.player.active_effects))
             effects_text = self.font.render(
@@ -600,7 +622,6 @@ class Game:
             )
             self.screen.blit(effects_text, (10, 330))
 
-        # Лучший счёт
         if self.best_score > 0:
             best_text = self.font.render(
                 f"Best: {self.best_score}",
