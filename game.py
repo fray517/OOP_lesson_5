@@ -62,6 +62,7 @@ class Game:
         
         # Таймеры
         self.last_enemy_spawn = 0
+        self.start_time = 0  # Время начала текущей игры
         
         # Шрифт для HUD
         try:
@@ -113,6 +114,7 @@ class Game:
         self.enemies_spawned = 0
         self.wave_complete = False
         self.wave_pause_timer = 0
+        self.start_time = pygame.time.get_ticks()
         self.last_enemy_spawn = pygame.time.get_ticks()
         
         self.state = GameState.PLAYING
@@ -397,6 +399,26 @@ class Game:
                 config.COLOR_WHITE
             )
             self.screen.blit(hp_text, (10, 90))
+            
+            # Полоска здоровья игрока
+            bar_width = 160
+            bar_height = 12
+            bar_x = 10
+            bar_y = 120
+            pygame.draw.rect(
+                self.screen,
+                config.COLOR_RED,
+                (bar_x, bar_y, bar_width, bar_height)
+            )
+            hp_width = int(
+                bar_width * (self.player.hp / self.player.max_hp)
+            )
+            if hp_width > 0:
+                pygame.draw.rect(
+                    self.screen,
+                    config.COLOR_GREEN,
+                    (bar_x, bar_y, hp_width, bar_height)
+                )
         
         # Волна
         wave_text = self.font.render(
@@ -404,7 +426,7 @@ class Game:
             True,
             config.COLOR_WHITE
         )
-        self.screen.blit(wave_text, (10, 130))
+        self.screen.blit(wave_text, (10, 170))
         
         # Прогресс волны
         if not self.wave_complete:
@@ -413,7 +435,27 @@ class Game:
                 True,
                 config.COLOR_WHITE
             )
-            self.screen.blit(progress_text, (10, 170))
+            self.screen.blit(progress_text, (10, 210))
+        
+        # Уровень сложности
+        difficulty_text = self.font.render(
+            f"Difficulty: {self.difficulty_level}",
+            True,
+            config.COLOR_WHITE
+        )
+        self.screen.blit(difficulty_text, (10, 250))
+        
+        # Таймер игры (мм:сс)
+        elapsed_ms = pygame.time.get_ticks() - self.start_time
+        elapsed_seconds = elapsed_ms // 1000
+        minutes = elapsed_seconds // 60
+        seconds = elapsed_seconds % 60
+        timer_text = self.font.render(
+            f"Time: {minutes:02d}:{seconds:02d}",
+            True,
+            config.COLOR_WHITE
+        )
+        self.screen.blit(timer_text, (10, 290))
 
     def draw_paused(self) -> None:
         """Отрисовка экрана паузы."""
