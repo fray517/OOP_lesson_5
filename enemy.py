@@ -3,6 +3,7 @@
 """
 
 import pygame
+import os
 import random
 from typing import Optional
 import config
@@ -14,6 +15,58 @@ class Enemy(pygame.sprite.Sprite):
     
     Имеет здоровье, получает урон от пуль и удаляется при выходе за экран.
     """
+    
+    # Загрузка изображений как атрибут класса (один раз для всех экземпляров)
+    _images = {}
+    
+    @classmethod
+    def _load_image(cls, enemy_type: str) -> pygame.Surface:
+        """
+        Загрузка изображения врага по типу.
+        
+        Args:
+            enemy_type: Тип врага.
+        
+        Returns:
+            Поверхность с изображением врага.
+        """
+        if enemy_type not in cls._images:
+            if enemy_type == "basic":
+                image_path = os.path.join(
+                    os.path.dirname(__file__),
+                    'assets',
+                    'enemy_ufo.png'
+                )
+                try:
+                    image = pygame.image.load(image_path).convert_alpha()
+                    # Масштабирование до нужного размера
+                    cls._images[enemy_type] = pygame.transform.scale(
+                        image,
+                        (config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                    )
+                except (pygame.error, FileNotFoundError):
+                    # Если изображение не загружено, создаём простой спрайт
+                    cls._images[enemy_type] = pygame.Surface(
+                        (config.ENEMY_WIDTH, config.ENEMY_HEIGHT),
+                        pygame.SRCALPHA
+                    )
+                    pygame.draw.rect(
+                        cls._images[enemy_type],
+                        config.ENEMY_COLOR,
+                        (0, 0, config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                    )
+            else:
+                # Для других типов врагов создаём простой спрайт
+                cls._images[enemy_type] = pygame.Surface(
+                    (config.ENEMY_WIDTH, config.ENEMY_HEIGHT),
+                    pygame.SRCALPHA
+                )
+                pygame.draw.rect(
+                    cls._images[enemy_type],
+                    config.ENEMY_COLOR,
+                    (0, 0, config.ENEMY_WIDTH, config.ENEMY_HEIGHT)
+                )
+        return cls._images[enemy_type]
 
     def __init__(
         self,
@@ -48,6 +101,9 @@ class Enemy(pygame.sprite.Sprite):
         )
         # Очки за уничтожение зависят от типа
         self.points = 10 if enemy_type == "basic" else 20
+        
+        # Загрузка изображения для данного типа врага
+        self.image = self._load_image(enemy_type)
 
     def update(self) -> None:
         """
@@ -67,12 +123,8 @@ class Enemy(pygame.sprite.Sprite):
         Args:
             surface: Поверхность для отрисовки.
         """
-        # Отрисовка врага
-        pygame.draw.rect(
-            surface,
-            config.ENEMY_COLOR,
-            self.rect
-        )
+        # Отрисовка изображения врага
+        surface.blit(self.image, self.rect)
         
         # Индикатор здоровья (полоска над врагом)
         if self.max_hp > 0:
@@ -92,11 +144,12 @@ class Enemy(pygame.sprite.Sprite):
             health_width = int(
                 bar_width * (self.hp / self.max_hp)
             )
-            pygame.draw.rect(
-                surface,
-                config.COLOR_GREEN,
-                (bar_x, bar_y, health_width, bar_height)
-            )
+            if health_width > 0:
+                pygame.draw.rect(
+                    surface,
+                    config.COLOR_GREEN,
+                    (bar_x, bar_y, health_width, bar_height)
+                )
 
     def take_damage(self, damage: int) -> bool:
         """
