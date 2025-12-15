@@ -51,6 +51,7 @@ class Game:
         
         # Игровые параметры
         self.score = 0
+        self.best_score = 0
         self.wave = 1
         self.base_difficulty = 1  # Стартовая сложность (можно менять в Settings)
         self.difficulty_level = self.base_difficulty
@@ -126,6 +127,15 @@ class Game:
         self.last_enemy_spawn = pygame.time.get_ticks()
         
         self.state = GameState.PLAYING
+
+    def reset_game(self) -> None:
+        """
+        Полный сброс игры для рестарта.
+        
+        Сбрасывает положение игрока, очищает группы спрайтов, счёт и волны.
+        Используется при рестарте из состояния GAME_OVER.
+        """
+        self.start_game()
     
     def handle_menu_input(self, event: pygame.event.Event) -> None:
         """
@@ -219,7 +229,7 @@ class Game:
         elif self.state == GameState.GAME_OVER:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
-                    self.start_game()
+                    self.reset_game()
                 elif event.key == pygame.K_ESCAPE:
                     self.state = GameState.MENU
 
@@ -229,6 +239,9 @@ class Game:
             return
         
         if not self.player or not self.player.is_alive():
+            # Обновляем лучший счёт перед переходом в GAME_OVER
+            if self.score > self.best_score:
+                self.best_score = self.score
             self.state = GameState.GAME_OVER
             return
         
@@ -675,6 +688,18 @@ class Game:
             center=(config.SCREEN_WIDTH // 2, 300)
         )
         self.screen.blit(score_text, score_rect)
+        
+        # Лучший результат за сессию
+        if self.best_score > 0:
+            best_text = self.font.render(
+                f"Best Score: {self.best_score}",
+                True,
+                config.COLOR_YELLOW
+            )
+            best_rect = best_text.get_rect(
+                center=(config.SCREEN_WIDTH // 2, 340)
+            )
+            self.screen.blit(best_text, best_rect)
         
         instruction = self.font.render(
             "Нажмите R для рестарта или ESC для выхода в меню",
