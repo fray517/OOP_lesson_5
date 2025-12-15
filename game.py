@@ -37,9 +37,12 @@ class Game:
         self.state = GameState.MENU
         self.clock = pygame.time.Clock()
         
-        # Sprite groups
+        # Sprite groups для оптимизации
+        # all_sprites — все спрайты для отрисовки
         self.all_sprites = pygame.sprite.Group()
+        # bullets — все пули игрока
         self.bullets = pygame.sprite.Group()
+        # enemies — все враги
         self.enemies = pygame.sprite.Group()
         
         # Игрок
@@ -153,14 +156,17 @@ class Game:
             self.all_sprites.add(enemy)
             self.last_enemy_spawn = current_time
         
-        # Проверка столкновений пуль и врагов
+        # Проверка столкновений пуль и врагов (оптимизированная)
+        # Используем spritecollide для каждой пули
         for bullet in self.bullets:
             hit_enemies = pygame.sprite.spritecollide(
                 bullet,
                 self.enemies,
                 False
             )
-            for enemy in hit_enemies:
+            if hit_enemies:
+                # Обрабатываем первое столкновение
+                enemy = hit_enemies[0]
                 if enemy.take_damage(bullet.damage):
                     self.score += enemy.points
                 bullet.kill()
@@ -214,18 +220,51 @@ class Game:
         self.screen.blit(instruction, inst_rect)
 
     def draw_game(self) -> None:
-        """Отрисовка игрового процесса."""
+        """
+        Отрисовка игрового процесса.
+        
+        Использует sprite groups для оптимизированной отрисовки.
+        """
         current_time = pygame.time.get_ticks()
         
-        # Отрисовка пуль
+        # Автоматическая отрисовка базовых спрайтов через sprite groups
+        # group.draw() использует атрибуты image и rect для отрисовки
+        # Для пуль используем кастомный метод draw() (с яркой точкой)
         for bullet in self.bullets:
             bullet.draw(self.screen)
         
-        # Отрисовка врагов
-        for enemy in self.enemies:
-            enemy.draw(self.screen)
+        # Для врагов используем group.draw() для базовой отрисовки
+        self.enemies.draw(self.screen)
         
-        # Отрисовка игрока (для мигания при неуязвимости)
+        # Дополнительная отрисовка кастомных элементов
+        # (индикатор здоровья для врагов)
+        for enemy in self.enemies:
+            # Отрисовка индикатора здоровья поверх базового спрайта
+            if enemy.max_hp > 0:
+                bar_width = enemy.rect.width
+                bar_height = 4
+                bar_x = enemy.rect.x
+                bar_y = enemy.rect.y - 8
+                
+                # Фон полоски (красный)
+                pygame.draw.rect(
+                    self.screen,
+                    config.COLOR_RED,
+                    (bar_x, bar_y, bar_width, bar_height)
+                )
+                
+                # Здоровье (зелёный)
+                health_width = int(
+                    bar_width * (enemy.hp / enemy.max_hp)
+                )
+                if health_width > 0:
+                    pygame.draw.rect(
+                        self.screen,
+                        config.COLOR_GREEN,
+                        (bar_x, bar_y, health_width, bar_height)
+                    )
+        
+        # Отрисовка игрока (отдельно для мигания при неуязвимости)
         if self.player:
             self.player.draw(self.screen, current_time)
         
