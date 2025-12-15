@@ -68,6 +68,28 @@ class Game:
             self.font = pygame.font.Font(None, 36)
         except Exception:
             self.font = pygame.font.SysFont('arial', 36)
+    
+    def cleanup(self) -> None:
+        """
+        Периодическая очистка неактивных объектов.
+        
+        Удаляет объекты, которые были помечены kill(), но ещё не удалены
+        из групп. В основном используется для отладки, так как kill()
+        автоматически удаляет объекты из sprite groups.
+        """
+        # Проверяем пули
+        for bullet in list(self.bullets):
+            if not bullet.alive():
+                self.bullets.remove(bullet)
+                if bullet in self.all_sprites:
+                    self.all_sprites.remove(bullet)
+        
+        # Проверяем врагов
+        for enemy in list(self.enemies):
+            if not enemy.alive():
+                self.enemies.remove(enemy)
+                if enemy in self.all_sprites:
+                    self.all_sprites.remove(enemy)
 
     def start_game(self) -> None:
         """Начало новой игры."""
@@ -192,7 +214,10 @@ class Game:
         
         # Проверка столкновений пуль и врагов (оптимизированная)
         # Используем spritecollide для каждой пули
-        for bullet in self.bullets:
+        # Создаём копию списка пуль, чтобы избежать проблем при удалении
+        bullets_to_check = list(self.bullets)
+        for bullet in bullets_to_check:
+            # Проверяем столкновение пули с группой врагов
             hit_enemies = pygame.sprite.spritecollide(
                 bullet,
                 self.enemies,
@@ -202,17 +227,24 @@ class Game:
                 # Обрабатываем первое столкновение
                 enemy = hit_enemies[0]
                 if enemy.take_damage(bullet.damage):
+                    # Враг уничтожен — увеличиваем счёт
                     self.score += enemy.points
+                    # Здесь можно добавить эффект взрыва (опционально)
+                # Пулю удаляем после попадания
                 bullet.kill()
         
-        # Проверка столкновений игрока и врагов
-        if self.player:
+        # Проверка столкновений игрока и врагов (оптимизированная)
+        if self.player and not self.player.is_invincible:
+            # Проверяем столкновение игрока с группой врагов
+            # True означает автоматическое удаление врагов из группы
             hit_enemies = pygame.sprite.spritecollide(
                 self.player,
                 self.enemies,
                 True
             )
-            for enemy in hit_enemies:
+            if hit_enemies:
+                # При столкновении игрок получает урон
+                # Обрабатываем только первое столкновение за кадр
                 self.player.take_damage(10, current_time)
 
     def draw(self) -> None:
