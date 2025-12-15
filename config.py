@@ -10,7 +10,7 @@ FPS = 60
 # Скорости
 PLAYER_SPEED = 5
 BULLET_SPEED = 10
-ENEMY_SPEED = 3
+ENEMY_SPEED = 1
 
 # Интервалы
 BULLET_COOLDOWN = 300  # миллисекунды между выстрелами
@@ -28,6 +28,8 @@ BULLET_WIDTH = 5
 BULLET_HEIGHT = 10
 ENEMY_WIDTH = 30
 ENEMY_HEIGHT = 30
+POWERUP_WIDTH = 20
+POWERUP_HEIGHT = 20
 
 # Цвета
 COLOR_BLACK = (0, 0, 0)
@@ -45,3 +47,9 @@ ENEMY_COLOR = COLOR_RED
 
 # Неуязвимость
 INVINCIBILITY_DURATION = 2000  # миллисекунды
+
+# Бонусы
+POWERUP_CHANCE = 0.2  # шанс появления бонуса при смерти врага
+POWERUP_SPEED = 3
+POWERUP_DURATION = 8000  # длительность временных эффектов, мс
+RAPID_FIRE_COOLDOWN = 120
