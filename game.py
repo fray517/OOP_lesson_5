@@ -53,6 +53,13 @@ class Game:
         self.wave = 1
         self.difficulty_level = 1
         
+        # Система волн
+        self.enemies_in_wave = 5  # Количество врагов в первой волне
+        self.enemies_spawned = 0  # Количество заспавненных врагов в текущей волне
+        self.wave_complete = False  # Флаг завершения волны
+        self.wave_pause_timer = 0  # Таймер паузы между волнами
+        self.wave_pause_duration = 3000  # Длительность паузы (мс)
+        
         # Таймеры
         self.last_enemy_spawn = 0
         
@@ -80,6 +87,10 @@ class Game:
         self.score = 0
         self.wave = 1
         self.difficulty_level = 1
+        self.enemies_in_wave = 5
+        self.enemies_spawned = 0
+        self.wave_complete = False
+        self.wave_pause_timer = 0
         self.last_enemy_spawn = pygame.time.get_ticks()
         
         self.state = GameState.PLAYING
@@ -148,12 +159,35 @@ class Game:
         # Обновление врагов
         self.enemies.update()
         
-        # Спавн врагов
-        if (current_time - self.last_enemy_spawn >=
+        # Проверка завершения волны (все враги уничтожены)
+        if (not self.wave_complete and 
+                self.enemies_spawned >= self.enemies_in_wave and
+                len(self.enemies) == 0):
+            self.wave_complete = True
+            self.wave_pause_timer = current_time
+        
+        # Пауза между волнами
+        if self.wave_complete:
+            if current_time - self.wave_pause_timer >= self.wave_pause_duration:
+                # Переход к следующей волне
+                self.wave += 1
+                self.enemies_in_wave = 5 + (self.wave - 1) * 2  # Увеличение врагов
+                self.enemies_spawned = 0
+                self.wave_complete = False
+                self.difficulty_level = min(
+                    self.wave // 3 + 1, 10
+                )  # Увеличение сложности
+                self.last_enemy_spawn = current_time
+        
+        # Спавн врагов (только если волна не завершена)
+        if (not self.wave_complete and 
+                self.enemies_spawned < self.enemies_in_wave and
+                current_time - self.last_enemy_spawn >=
                 config.ENEMY_SPAWN_INTERVAL):
             enemy = spawn_enemy("basic", config.SCREEN_WIDTH)
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
+            self.enemies_spawned += 1
             self.last_enemy_spawn = current_time
         
         # Проверка столкновений пуль и врагов (оптимизированная)
@@ -268,6 +302,41 @@ class Game:
         if self.player:
             self.player.draw(self.screen, current_time)
         
+        # Отрисовка сообщения о переходе к следующей волне
+        if self.wave_complete:
+            overlay = pygame.Surface(
+                (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+            )
+            overlay.set_alpha(128)
+            overlay.fill(config.COLOR_BLACK)
+            self.screen.blit(overlay, (0, 0))
+            
+            next_wave_text = self.font.render(
+                f"Wave {self.wave} Complete!",
+                True,
+                config.COLOR_GREEN
+            )
+            next_wave_rect = next_wave_text.get_rect(
+                center=(
+                    config.SCREEN_WIDTH // 2,
+                    config.SCREEN_HEIGHT // 2 - 50
+                )
+            )
+            self.screen.blit(next_wave_text, next_wave_rect)
+            
+            preparing_text = self.font.render(
+                f"Preparing Wave {self.wave + 1}...",
+                True,
+                config.COLOR_WHITE
+            )
+            preparing_rect = preparing_text.get_rect(
+                center=(
+                    config.SCREEN_WIDTH // 2,
+                    config.SCREEN_HEIGHT // 2
+                )
+            )
+            self.screen.blit(preparing_text, preparing_rect)
+        
         # Отрисовка HUD
         self.draw_hud()
 
@@ -304,6 +373,15 @@ class Game:
             config.COLOR_WHITE
         )
         self.screen.blit(wave_text, (10, 130))
+        
+        # Прогресс волны
+        if not self.wave_complete:
+            progress_text = self.font.render(
+                f"Enemies: {self.enemies_spawned}/{self.enemies_in_wave}",
+                True,
+                config.COLOR_WHITE
+            )
+            self.screen.blit(progress_text, (10, 170))
 
     def draw_paused(self) -> None:
         """Отрисовка экрана паузы."""
