@@ -1,6 +1,6 @@
 """Основной класс игры с логикой состояний.
 
-Включает волны врагов, бонусы, эффекты и HUD.
+Включает волны врагов, бонусы, эффекты, HUD и звуки.
 """
 
 from __future__ import annotations
@@ -14,9 +14,10 @@ import pygame
 import config
 from bullet import Bullet
 from enemy import Enemy, spawn_enemy
+from explosion import Explosion, HitEffect, PickupEffect
 from player import Player
 from powerup import PowerUp
-from explosion import Explosion, HitEffect, PickupEffect
+from sound_manager import SoundManager
 
 
 class GameState(Enum):
@@ -38,12 +39,15 @@ class Game:
         self.state = GameState.MENU
         self.clock = pygame.time.Clock()
 
+        # Менеджер звука
+        self.sound = SoundManager()
+
         # Группы спрайтов
         self.all_sprites = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.powerups = pygame.sprite.Group()
-        self.effects = pygame.sprite.Group()  # взрывы и вспышки
+        self.effects = pygame.sprite.Group()
 
         # Игрок
         self.player: Optional[Player] = None
@@ -115,6 +119,9 @@ class Game:
         self.last_enemy_spawn = now
         self.start_time = now
 
+        # Запуск музыки (если доступна)
+        self.sound.play_music(loop=True)
+
         self.state = GameState.PLAYING
 
     def reset_game(self) -> None:
@@ -153,7 +160,7 @@ class Game:
             pygame.event.post(pygame.event.Event(pygame.QUIT))
 
     def handle_pause_input(self, event: pygame.event.Event) -> None:
-        """Обработка ввода на экране паузы."""
+        """Обработка ввода на экране паузы.""" 
         if event.type != pygame.KEYDOWN:
             return
 
@@ -163,7 +170,7 @@ class Game:
             self.state = GameState.MENU
 
     def handle_settings_input(self, event: pygame.event.Event) -> None:
-        """Обработка ввода на экране настроек."""
+        """Обработка ввода на экране настроек.""" 
         if event.type != pygame.KEYDOWN:
             return
 
@@ -197,6 +204,7 @@ class Game:
                     current_time = pygame.time.get_ticks()
                     bullets = self.player.shoot(current_time)
                     if bullets:
+                        self.sound.play_shoot()
                         for bullet in bullets:
                             self.bullets.add(bullet)
                             self.all_sprites.add(bullet)
@@ -270,7 +278,6 @@ class Game:
                 )
                 self.last_enemy_spawn = current_time
 
-        # Параметры врагов
         spawn_interval = max(
             self.base_spawn_interval - (self.difficulty_level - 1) * 150,
             self.min_spawn_interval,
@@ -318,14 +325,13 @@ class Game:
                 if enemy.take_damage(bullet.damage):
                     self.score += enemy.points
                     self._maybe_spawn_powerup(enemy)
-                    # Взрыв на месте врага
                     explosion = Explosion(
                         enemy.rect.centerx,
                         enemy.rect.centery,
                     )
                     self.effects.add(explosion)
                     self.all_sprites.add(explosion)
-                # Вспышка попадания
+                    self.sound.play_explosion()
                 hit_effect = HitEffect(
                     bullet.rect.centerx,
                     bullet.rect.centery,
@@ -344,6 +350,7 @@ class Game:
             )
             if enemy_hits:
                 self.player.take_damage(10, current_time)
+                self.sound.play_damage()
 
         # Игрок и бонусы
         if self.player:
@@ -360,6 +367,7 @@ class Game:
                 )
                 self.effects.add(pickup_effect)
                 self.all_sprites.add(pickup_effect)
+                self.sound.play_powerup()
 
     def _maybe_spawn_powerup(self, enemy: Enemy) -> None:
         """С шансом создать бонус на месте уничтоженного врага."""
@@ -481,32 +489,26 @@ class Game:
         """Отрисовка игрового процесса."""
         current_time = pygame.time.get_ticks()
 
-        # Пули
         for bullet in self.bullets:
             bullet.draw(self.screen)
 
-        # Враги
         self.enemies.draw(self.screen)
         for enemy in self.enemies:
             enemy.draw(self.screen)
 
-        # Бонусы
         for powerup in self.powerups:
             self.screen.blit(powerup.image, powerup.rect)
 
-        # Эффекты
         self.effects.draw(self.screen)
 
-        # Игрок
         if self.player:
             self.player.draw(self.screen, current_time)
 
-        # HUD и оверлеи
         self._draw_wave_overlay()
         self.draw_hud()
 
     def _draw_wave_overlay(self) -> None:
-        """Сообщение о завершении волны и ожидании следующей."""
+        """Сообщение о завершении волны."""
         if not self.wave_complete:
             return
 
