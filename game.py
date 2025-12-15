@@ -63,6 +63,14 @@ class Game:
         self.wave_pause_timer = 0  # Таймер паузы между волнами
         self.wave_pause_duration = 3000  # Длительность паузы (мс)
         
+        # Параметры усложнения
+        self.base_spawn_interval = config.ENEMY_SPAWN_INTERVAL
+        self.min_spawn_interval = 500
+        self.base_enemy_speed = config.ENEMY_SPEED
+        self.max_enemy_speed = 8
+        self.base_enemy_hp = config.ENEMY_BASIC_HP
+        self.max_enemy_hp = 100
+        
         # Таймеры
         self.last_enemy_spawn = 0
         self.start_time = 0  # Время начала текущей игры
@@ -268,23 +276,43 @@ class Game:
         
         # Пауза между волнами
         if self.wave_complete:
-            if current_time - self.wave_pause_timer >= self.wave_pause_duration:
+            if (current_time - self.wave_pause_timer
+                    >= self.wave_pause_duration):
                 # Переход к следующей волне
                 self.wave += 1
-                self.enemies_in_wave = 5 + (self.wave - 1) * 2  # Увеличение врагов
+                self.enemies_in_wave = 5 + (self.wave - 1) * 2
                 self.enemies_spawned = 0
                 self.wave_complete = False
                 self.difficulty_level = min(
-                    self.base_difficulty + self.wave // 3, 10
-                )  # Увеличение сложности с учётом базовой
+                    self.base_difficulty + self.wave // 3,
+                    10,
+                )
                 self.last_enemy_spawn = current_time
         
+        # Параметры врагов в зависимости от сложности
+        spawn_interval = max(
+            self.base_spawn_interval - (self.difficulty_level - 1) * 150,
+            self.min_spawn_interval,
+        )
+        enemy_speed = min(
+            self.base_enemy_speed + (self.difficulty_level - 1),
+            self.max_enemy_speed,
+        )
+        enemy_hp = min(
+            self.base_enemy_hp + (self.difficulty_level - 1) * 5,
+            self.max_enemy_hp,
+        )
+        
         # Спавн врагов (только если волна не завершена)
-        if (not self.wave_complete and 
+        if (not self.wave_complete and
                 self.enemies_spawned < self.enemies_in_wave and
-                current_time - self.last_enemy_spawn >=
-                config.ENEMY_SPAWN_INTERVAL):
-            enemy = spawn_enemy("basic", config.SCREEN_WIDTH)
+                current_time - self.last_enemy_spawn >= spawn_interval):
+            enemy = spawn_enemy(
+                "basic",
+                config.SCREEN_WIDTH,
+                speed=enemy_speed,
+                hp=enemy_hp,
+            )
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
             self.enemies_spawned += 1

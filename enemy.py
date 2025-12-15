@@ -168,23 +168,29 @@ class Enemy(pygame.sprite.Sprite):
         return False
 
 
-def spawn_enemy(enemy_type: str, screen_width: int) -> Enemy:
+def spawn_enemy(
+    enemy_type: str,
+    screen_width: int,
+    speed: int | None = None,
+    hp: int | None = None,
+) -> Enemy:
     """
-    Фабрика для создания врагов в случайной горизонтальной позиции.
+    Фабрика для создания врагов в случайной позиции сверху.
     
     Args:
         enemy_type: Тип врага.
         screen_width: Ширина экрана.
+        speed: Скорость движения вниз. Если None, берётся из config.
+        hp: Здоровье врага. Если None, берётся из config.
     
     Returns:
         Новый объект Enemy.
     """
-    x = random.randint(
-        0,
-        screen_width - config.ENEMY_WIDTH
-    )
+    x = random.randint(0, screen_width - config.ENEMY_WIDTH)
     y = -config.ENEMY_HEIGHT
-    speed = config.ENEMY_SPEED
-    hp = config.ENEMY_BASIC_HP
+    if speed is None:
+        speed = config.ENEMY_SPEED
+    if hp is None:
+        hp = config.ENEMY_BASIC_HP
     
     return Enemy(x, y, speed, hp, enemy_type)
